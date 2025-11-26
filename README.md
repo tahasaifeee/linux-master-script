@@ -15,6 +15,32 @@ A universal Linux management tool compatible with all major Linux distributions 
   - Ubuntu 16.04 and above
   - Debian 8 (Jessie) and above
 
+## Quick Install (One-Click)
+
+### Option 1: Download and Run (Recommended)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/tahasaifeee/linux-master-script/main/linux-master-script.sh -o linux-master-script.sh && chmod +x linux-master-script.sh && sudo ./linux-master-script.sh
+```
+
+### Option 2: Using wget
+
+```bash
+wget -O linux-master-script.sh https://raw.githubusercontent.com/tahasaifeee/linux-master-script/main/linux-master-script.sh && chmod +x linux-master-script.sh && sudo ./linux-master-script.sh
+```
+
+### Option 3: Direct Execution (Advanced)
+
+```bash
+sudo bash <(curl -fsSL https://raw.githubusercontent.com/tahasaifeee/linux-master-script/main/linux-master-script.sh)
+```
+
+### Option 4: From Development Branch
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/tahasaifeee/linux-master-script/claude/universal-linux-management-script-01T7obeWcZkkZmwo7NeP42HS/linux-master-script.sh -o linux-master-script.sh && chmod +x linux-master-script.sh && sudo ./linux-master-script.sh
+```
+
 ## Features
 
 The script provides an interactive menu with the following options:
