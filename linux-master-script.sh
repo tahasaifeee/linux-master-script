@@ -15,6 +15,68 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 ###############################################################################
+# Password Authentication Configuration
+###############################################################################
+# IMPORTANT: Change this password hash for security!
+# To generate a new password hash, run:
+# echo -n "your_password" | sha256sum | cut -d' ' -f1
+#
+# Default password: "LinuxAdmin2024"
+# Default hash below - CHANGE THIS!
+SCRIPT_PASSWORD_HASH="990ef64f2f6d518e4f67ad25cb5f4cf5dc676277c10ccbd530ae34cea0020e5c"
+
+# Maximum login attempts
+MAX_ATTEMPTS=3
+
+###############################################################################
+# Password Authentication Function
+###############################################################################
+
+authenticate_user() {
+    local attempts=0
+    local authenticated=false
+
+    print_header "Authentication Required"
+    echo -e "${YELLOW}This script is password protected.${NC}"
+    echo -e "${BLUE}Contact your administrator if you don't have access.${NC}\n"
+
+    while [ $attempts -lt $MAX_ATTEMPTS ]; do
+        # Prompt for password (silent input)
+        echo -n "Enter password: "
+        read -s user_password
+        echo ""
+
+        # Generate hash of entered password
+        entered_hash=$(echo -n "$user_password" | sha256sum | cut -d' ' -f1)
+
+        # Compare hashes
+        if [ "$entered_hash" = "$SCRIPT_PASSWORD_HASH" ]; then
+            authenticated=true
+            break
+        else
+            attempts=$((attempts + 1))
+            remaining=$((MAX_ATTEMPTS - attempts))
+
+            if [ $remaining -gt 0 ]; then
+                print_error "Invalid password. $remaining attempt(s) remaining."
+            fi
+        fi
+
+        # Clear password variable
+        user_password=""
+    done
+
+    if [ "$authenticated" = false ]; then
+        print_error "Authentication failed. Maximum attempts exceeded."
+        print_error "Access denied. Exiting..."
+        exit 1
+    fi
+
+    print_success "Authentication successful!\n"
+    sleep 1
+}
+
+###############################################################################
 # Utility Functions
 ###############################################################################
 
@@ -413,6 +475,7 @@ main_loop() {
 ###############################################################################
 
 main() {
+    authenticate_user
     check_root
     detect_distribution
     detect_package_manager

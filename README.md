@@ -2,6 +2,10 @@
 
 A universal Linux management tool compatible with all major Linux distributions including legacy systems.
 
+## 🔒 Security Notice
+
+This repository is configured for **private access**. The script includes password authentication to ensure only authorized users can execute administrative operations.
+
 ## Supported Distributions
 
 - **Red Hat Family**
@@ -17,29 +21,108 @@ A universal Linux management tool compatible with all major Linux distributions 
 
 ## Quick Install (One-Click)
 
-### Option 1: Download and Run (Recommended)
+### For Private Repository Access
+
+Since this repository is private, you need to authenticate with GitHub. Choose one of the methods below:
+
+#### Method 1: Using Personal Access Token (Recommended)
+
+1. **Create a GitHub Personal Access Token** (if you don't have one):
+   - Go to GitHub Settings → Developer settings → Personal access tokens → Tokens (classic)
+   - Click "Generate new token (classic)"
+   - Select scope: `repo` (Full control of private repositories)
+   - Generate and copy the token
+
+2. **Download and run the script:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/tahasaifeee/linux-master-script/main/linux-master-script.sh -o linux-master-script.sh && chmod +x linux-master-script.sh && sudo ./linux-master-script.sh
+# Replace YOUR_GITHUB_TOKEN with your actual token
+curl -H "Authorization: token YOUR_GITHUB_TOKEN" \
+     -H "Accept: application/vnd.github.v3.raw" \
+     -fsSL https://api.github.com/repos/tahasaifeee/linux-master-script/contents/linux-master-script.sh \
+     -o linux-master-script.sh && chmod +x linux-master-script.sh && sudo ./linux-master-script.sh
 ```
 
-### Option 2: Using wget
+#### Method 2: Using Git Clone (Alternative)
 
 ```bash
-wget -O linux-master-script.sh https://raw.githubusercontent.com/tahasaifeee/linux-master-script/main/linux-master-script.sh && chmod +x linux-master-script.sh && sudo ./linux-master-script.sh
+# Clone the repository (will prompt for GitHub credentials)
+git clone https://github.com/tahasaifeee/linux-master-script.git
+cd linux-master-script
+chmod +x linux-master-script.sh
+sudo ./linux-master-script.sh
 ```
 
-### Option 3: Direct Execution (Advanced)
+#### Method 3: Using SSH (For SSH Key Users)
 
 ```bash
-sudo bash <(curl -fsSL https://raw.githubusercontent.com/tahasaifeee/linux-master-script/main/linux-master-script.sh)
+git clone git@github.com:tahasaifeee/linux-master-script.git
+cd linux-master-script
+chmod +x linux-master-script.sh
+sudo ./linux-master-script.sh
 ```
 
-### Option 4: From Development Branch
+### Making the Repository Private
+
+To convert this repository from public to private:
+
+1. Go to your repository on GitHub
+2. Click **Settings** (repository settings, not account settings)
+3. Scroll down to the **Danger Zone** section
+4. Click **Change repository visibility**
+5. Select **Make private**
+6. Confirm the action
+
+## Password Authentication
+
+The script is protected with password authentication. You will be prompted to enter a password when running the script.
+
+### Default Credentials
+
+- **Default Password:** `LinuxAdmin2024`
+- **Maximum Attempts:** 3
+
+⚠️ **IMPORTANT:** Change the default password immediately after first use!
+
+### Changing the Password
+
+To set a custom password:
+
+1. **Generate a new password hash:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/tahasaifeee/linux-master-script/claude/universal-linux-management-script-01T7obeWcZkkZmwo7NeP42HS/linux-master-script.sh -o linux-master-script.sh && chmod +x linux-master-script.sh && sudo ./linux-master-script.sh
+echo -n "YourNewPassword" | sha256sum | cut -d' ' -f1
 ```
+
+2. **Edit the script** and replace the hash:
+
+```bash
+nano linux-master-script.sh
+# Or use your preferred editor
+vim linux-master-script.sh
+```
+
+3. **Find this line** (around line 26):
+
+```bash
+SCRIPT_PASSWORD_HASH="990ef64f2f6d518e4f67ad25cb5f4cf5dc676277c10ccbd530ae34cea0020e5c"
+```
+
+4. **Replace it** with your new hash:
+
+```bash
+SCRIPT_PASSWORD_HASH="your_new_hash_here"
+```
+
+5. **Update the comment** showing the default password (line 24) for your reference
+
+### Security Features
+
+- Password is never stored in plain text (SHA256 hashed)
+- Silent password input (characters not displayed)
+- Limited login attempts (3 attempts max)
+- Script exits automatically after failed authentication
+- Authentication required before any operations
 
 ## Features
 
@@ -79,6 +162,7 @@ The script provides an interactive menu with the following options:
 
 - Root or sudo access
 - Internet connection (for updates and installations)
+- Valid authentication password
 
 ### Running the Script
 
@@ -93,13 +177,17 @@ sudo ./linux-master-script.sh
 sudo bash linux-master-script.sh
 ```
 
-### Interactive Menu
+### Script Workflow
 
-Once started, the script will:
-1. Display system information
-2. Present an interactive menu
-3. Execute your selected option
-4. Return to the menu after completion
+When you run the script, it will:
+1. **Prompt for password** (default: `LinuxAdmin2024`)
+2. **Verify authentication** (3 attempts maximum)
+3. **Check root privileges**
+4. **Detect distribution** and package manager
+5. **Display system information**
+6. **Present interactive menu**
+7. Execute your selected option
+8. Return to the menu after completion
 
 Simply enter the number of your choice (1-6) and press Enter.
 
@@ -160,12 +248,38 @@ The script uses color-coded output for better readability:
 
 ## Notes
 
-- Always run the script as root or with sudo privileges
+- **Always run the script as root or with sudo privileges**
+- **Change the default password immediately after first use**
+- Keep your password hash secure and don't share it
+- Store authentication credentials securely
 - Internet connection required for updates and installations
 - Some operations may require system reboot
 - EPEL repository is automatically installed when needed for RHEL-based systems
+- For private repository: Ensure your GitHub token has appropriate permissions
+- Consider using SSH keys for easier authentication with private repos
 
 ## Troubleshooting
+
+### Authentication failed
+```bash
+# If you forgot the password, you need to edit the script and set a new hash
+# Generate new password hash:
+echo -n "YourNewPassword" | sha256sum | cut -d' ' -f1
+
+# Edit the script and replace SCRIPT_PASSWORD_HASH with the new hash
+nano linux-master-script.sh
+```
+
+### Cannot access private repository
+```bash
+# Make sure you have:
+# 1. A valid GitHub Personal Access Token with 'repo' scope
+# 2. Or SSH keys configured on your account
+# 3. Proper permissions to access the repository
+
+# Test access:
+git clone https://github.com/tahasaifeee/linux-master-script.git
+```
 
 ### Script requires root access
 ```bash
@@ -178,6 +292,12 @@ This usually means you're running an unsupported distribution. Check that you're
 
 ### Network issues during installation
 Ensure your system has internet connectivity and can reach package repositories.
+
+### Maximum authentication attempts exceeded
+The script exits after 3 failed password attempts. If you're locked out:
+1. Wait and try again
+2. Verify you're using the correct password
+3. If forgotten, edit the script and set a new password hash
 
 ## License
 
