@@ -21,6 +21,7 @@ NC='\033[0m' # No Color
 SSH_CONFIG="/etc/ssh/sshd_config"
 SSHD_SERVICE="sshd"
 UFW_ENABLED=false
+REBOOT_REQUIRED=false
 
 ###############################################################################
 # Utility Functions
@@ -351,7 +352,7 @@ check_cloud_init() {
             local enabled_count=0
             for service in cloud-init-local cloud-init cloud-config cloud-final; do
                 if systemctl is-enabled "${service}.service" &> /dev/null; then
-                    ((enabled_count++))
+                    enabled_count=$((enabled_count + 1))
                 fi
             done
 
@@ -627,6 +628,60 @@ configure_ufw_rules() {
 }
 
 ###############################################################################
+# System Update Functions
+###############################################################################
+
+run_system_updates() {
+    print_step "Running System Updates"
+
+    case "$PKG_MANAGER" in
+        apt)
+            print_info "Updating package lists..."
+            apt-get update -y
+
+            print_info "Upgrading packages (including security updates)..."
+            DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+
+            print_info "Performing distribution upgrade..."
+            DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y
+
+            print_info "Removing unnecessary packages..."
+            apt-get autoremove -y
+            apt-get autoclean -y
+            ;;
+        yum)
+            print_info "Updating all packages (including security updates)..."
+            yum update -y
+
+            print_info "Cleaning up..."
+            yum clean all
+            ;;
+        dnf)
+            print_info "Updating all packages (including security updates)..."
+            dnf update -y
+
+            print_info "Cleaning up..."
+            dnf clean all
+            ;;
+    esac
+
+    print_success "System updates completed successfully!"
+
+    # Check if reboot is required
+    if [ -f /var/run/reboot-required ]; then
+        print_warning "System reboot is required after updates!"
+        REBOOT_REQUIRED=true
+    elif [ "$PKG_MANAGER" != "apt" ]; then
+        if command -v needs-restarting &> /dev/null; then
+            if ! needs-restarting -r &> /dev/null; then
+                print_warning "System reboot is recommended after updates!"
+                REBOOT_REQUIRED=true
+            fi
+        fi
+    fi
+}
+
+###############################################################################
 # Summary and Completion
 ###############################################################################
 
@@ -691,6 +746,13 @@ display_summary() {
         print_warning "IMPORTANT: SSH port has been changed to $NEW_SSH_PORT"
         print_warning "Make sure to use the new port for future connections!"
         print_info "Example: ssh -p $NEW_SSH_PORT user@hostname"
+        echo ""
+    fi
+
+    if [ "$REBOOT_REQUIRED" = true ]; then
+        print_warning "IMPORTANT: System reboot is required/recommended!"
+        print_info "Please reboot the system before creating the template"
+        echo ""
     fi
 
     print_success "Your VM is now ready for template creation!"
@@ -711,6 +773,7 @@ main_wizard() {
     echo "  • Cloud-Init services"
     echo "  • QEMU Guest Agent"
     echo "  • UFW Firewall rules"
+    echo "  • System Updates (security patches)"
     echo ""
 
     if ! ask_yes_no "Do you want to continue?"; then
@@ -752,6 +815,15 @@ main_wizard() {
     # UFW Firewall
     print_header "Step 4: UFW Firewall"
     check_ufw_firewall
+    echo ""
+
+    # System Updates
+    print_header "Step 5: System Updates"
+    if ask_yes_no "Do you want to run system updates (including security patches)?"; then
+        run_system_updates
+    else
+        print_info "Skipping system updates"
+    fi
     echo ""
 
     # Display summary
