@@ -84,11 +84,11 @@ ask_input() {
     local question="$1"
     local default="$2"
     local response
-    echo -ne "${YELLOW}$question${NC}"
+    echo -ne "${YELLOW}$question${NC}" >&2
     if [ -n "$default" ]; then
-        echo -ne " ${CYAN}[default: $default]${NC}"
+        echo -ne " ${CYAN}[default: $default]${NC}" >&2
     fi
-    echo -ne ": "
+    echo -ne ": " >&2
     read -r response
     if [ -z "$response" ] && [ -n "$default" ]; then
         echo "$default"
