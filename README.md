@@ -1,6 +1,13 @@
 # Linux Master Script
 
-A universal Linux management tool compatible with all major Linux distributions including legacy systems.
+A universal Linux management toolkit compatible with all major Linux distributions including legacy systems.
+
+## 📦 Available Scripts
+
+This repository contains two powerful scripts:
+
+1. **linux-master-script.sh** - System management and maintenance
+2. **template-readiness.sh** - VM template preparation wizard
 
 ## Supported Distributions
 
@@ -15,7 +22,11 @@ A universal Linux management tool compatible with all major Linux distributions 
   - Ubuntu 16.04 and above
   - Debian 8 (Jessie) and above
 
-## Quick Install (One-Click)
+---
+
+## 🚀 Script 1: Linux Master Script
+
+### Quick Install (One-Click)
 
 ### Option 1: Download and Run (Recommended)
 
@@ -147,6 +158,124 @@ sudo ./linux-master-script.sh
 sudo ./linux-master-script.sh
 # Select option 2
 ```
+
+---
+
+## 🔧 Script 2: Template Readiness Wizard
+
+A comprehensive wizard-style script to prepare Linux VMs for template creation.
+
+### Quick Install (One-Click)
+
+#### Option 1: Download and Run (Recommended)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/tahasaifeee/linux-master-script/main/template-readiness.sh -o template-readiness.sh && chmod +x template-readiness.sh && sudo ./template-readiness.sh
+```
+
+#### Option 2: Using wget
+
+```bash
+wget -O template-readiness.sh https://raw.githubusercontent.com/tahasaifeee/linux-master-script/main/template-readiness.sh && chmod +x template-readiness.sh && sudo ./template-readiness.sh
+```
+
+#### Option 3: Direct Execution (Advanced)
+
+```bash
+sudo bash <(curl -fsSL https://raw.githubusercontent.com/tahasaifeee/linux-master-script/main/template-readiness.sh)
+```
+
+### Features
+
+The wizard guides you through configuring:
+
+#### 1. SSH Configuration
+- **Change SSH Port** - Configure custom SSH port
+- **Root Login** - Enable or disable root login via SSH
+- **Password Authentication** - Enable or disable password authentication
+- Automatic backup of SSH configuration before changes
+- Validates port numbers (1-65535)
+- Automatically restarts SSH service after changes
+
+#### 2. Cloud-Init Services
+- Checks if cloud-init is installed
+- Verifies all cloud-init services are enabled
+- Offers to install cloud-init if missing
+- Enables all required services (cloud-init-local, cloud-init, cloud-config, cloud-final)
+- Automatically installs EPEL repository when needed (RHEL/CentOS)
+
+#### 3. QEMU Guest Agent
+- Checks if QEMU guest agent is installed
+- Verifies service is running
+- Offers to install if missing
+- Starts and enables the service automatically
+- Essential for VM management in virtualized environments
+
+#### 4. UFW Firewall Configuration
+- Checks UFW installation and status
+- Configures firewall rules interactively
+- Automatically allows configured SSH port
+- Supports adding custom ports (TCP/UDP)
+- Provides suggestions for common ports (HTTP, HTTPS, RDP, etc.)
+- Offers quick setup for web server ports (80, 443)
+- Installs UFW if not present (with EPEL on RHEL-based systems)
+
+#### 5. Configuration Summary
+- Displays complete configuration summary
+- Shows all changes made during wizard
+- Color-coded status indicators
+- Lists current UFW rules
+- Provides important warnings (e.g., changed SSH port)
+
+### Wizard Workflow
+
+When you run the script, it will:
+
+1. **Welcome Screen** - Explains what the wizard will configure
+2. **System Detection** - Automatically detects distribution and version
+3. **SSH Configuration** - Interactive prompts for SSH settings
+4. **Cloud-Init Check** - Verifies or installs cloud-init
+5. **QEMU Agent Check** - Verifies or installs QEMU guest agent
+6. **Firewall Configuration** - Sets up UFW firewall rules
+7. **Summary Display** - Shows complete configuration summary
+
+### Usage Example
+
+```bash
+# Run the wizard
+sudo ./template-readiness.sh
+
+# Follow the interactive prompts:
+# - Set SSH port (e.g., 22 or custom)
+# - Enable/disable root login
+# - Enable/disable password auth
+# - Install/check cloud-init
+# - Install/check QEMU agent
+# - Configure firewall rules
+# - Review summary
+```
+
+### What Makes This Different?
+
+- **Wizard-Style Interface** - Step-by-step guided configuration
+- **Interactive Prompts** - Ask before making changes
+- **Smart Defaults** - Suggests sensible default values
+- **Comprehensive Checks** - Verifies existing configuration before changes
+- **Automatic Backups** - Creates timestamped backups of SSH config
+- **Validation** - Validates all user inputs
+- **Summary Report** - Shows exactly what was configured
+- **Color-Coded Output** - Easy to read status indicators
+
+### Color Coding
+
+- **Green ✓** - Success / Installed / Running / Enabled
+- **Yellow ⚠** - Warning / Partial / Not Running
+- **Red ✗** - Error / Not Installed
+- **Blue ℹ** - Information messages
+- **Cyan ➜** - Action steps
+- **Magenta →** - Results and details
+
+---
 
 ## Exit Codes
 
