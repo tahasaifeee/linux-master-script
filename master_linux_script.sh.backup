@@ -1,0 +1,563 @@
+#!/bin/bash
+
+# Master Linux Script - Combines all functionality into one script
+# This script handles Linux Master tasks and Template Readiness tasks
+
+# Set up logging
+LOG_FILE="/tmp/master_linux_script.log"
+exec 3>&1 4>&2
+exec 1>>"$LOG_FILE"
+exec 2>>"$LOG_FILE"
+
+log_message() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >&3
+}
+
+log_error() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - ERROR: $1" >&4
+}
+
+cleanup_on_exit() {
+    exec 1>&3 2>&4
+    exec 3>&- 4>&-
+}
+
+trap cleanup_on_exit EXIT
+
+log_message "Master Linux Script started"
+
+# Function to validate IP address
+validate_ip() {
+    local ip=$1
+    if [[ $ip =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+        OIFS=$IFS
+        IFS='.'
+        read -ra ADDR <<< "$ip"
+        IFS=$OIFS
+        for element in "${ADDR[@]}"; do
+            if (( element < 0 || element > 255 )); then
+                return 1
+            fi
+        done
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Function to get network interface
+get_network_interface() {
+    # Get the primary network interface
+    local interface=$(ip route | grep default | awk '{print $5}' | head -n1)
+    if [ -z "$interface" ]; then
+        interface="eth0"  # fallback
+    fi
+    echo "$interface"
+}
+
+# Function to get network info
+get_network_info() {
+    local interface=$1
+    local ip_address=$(ip addr show "$interface" | grep 'inet ' | awk '{print $2}' | cut -d'/' -f1 | head -n1)
+    local subnet_mask=$(ip addr show "$interface" | grep 'inet ' | awk '{print $2}' | cut -d'/' -f2 | head -n1)
+    
+    # Convert CIDR to subnet mask if needed
+    case $subnet_mask in
+        24) subnet_mask="255.255.255.0" ;;
+        8) subnet_mask="255.0.0.0" ;;
+        16) subnet_mask="255.255.0.0" ;;
+        32) subnet_mask="255.255.255.255" ;;
+    esac
+    
+    echo "$ip_address,$subnet_mask"
+}
+
+# Function to ping hosts
+ping_hosts() {
+    local network=$1
+    local subnet=$2
+    local interface=$3
+    local ping_timeout=${4:-3}
+    local results_file="${5:-/tmp/ping_results.txt}"
+    
+    log_message "Starting ping sweep on network $network with subnet $subnet using interface $interface"
+    
+    # Clear results file
+    > "$results_file"
+    
+    # Calculate the network base (first 3 octets)
+    local network_base=$(echo "$network" | cut -d'.' -f1-3)
+    
+    # Ping all hosts in the network
+    for i in {1..254}; do
+        local host="$network_base.$i"
+        # Skip our own IP address
+        local own_ip=$(ip addr show "$interface" | grep 'inet ' | awk '{print $2}' | cut -d'/' -f1)
+        if [ "$host" != "$own_ip" ]; then
+            # Use fping if available, otherwise use regular ping
+            if command -v fping &> /dev/null; then
+                fping -c1 -t$((ping_timeout * 1000)) "$host" >/dev/null 2>&1 && echo "$host" >> "$results_file" &
+            else
+                ping -c1 -W$ping_timeout "$host" >/dev/null 2>&1 && echo "$host" >> "$results_file" &
+            fi
+        fi
+        
+        # Limit concurrent pings to prevent overwhelming the network
+        if (( $(jobs -r | wc -l) >= 50 )); then
+            wait -n
+        fi
+    done
+    
+    # Wait for all background jobs to complete
+    wait
+    
+    local count=$(wc -l < "$results_file")
+    log_message "Ping sweep completed. Found $count active hosts."
+    echo "$count active hosts found. Results saved to $results_file"
+}
+
+# Function to check SSH connectivity
+check_ssh_connectivity() {
+    local hosts_file=$1
+    local ssh_timeout=${2:-10}
+    local results_file="${3:-/tmp/ssh_results.txt}"
+    
+    log_message "Starting SSH connectivity check on hosts in $hosts_file"
+    
+    # Clear results file
+    > "$results_file"
+    
+    while IFS= read -r host; do
+        if [ -n "$host" ]; then
+            # Try to connect via SSH with a simple command
+            if ssh -o ConnectTimeout="$ssh_timeout" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$host" "exit 0" 2>/dev/null; then
+                echo "$host" >> "$results_file"
+                log_message "SSH connection successful to $host"
+            else
+                log_error "SSH connection failed to $host"
+            fi
+        fi
+    done < "$hosts_file"
+    
+    local count=$(wc -l < "$results_file")
+    log_message "SSH connectivity check completed. $count hosts accessible via SSH."
+    echo "$count hosts accessible via SSH. Results saved to $results_file"
+}
+
+# Function to get system information
+get_system_info() {
+    local host=$1
+    local output_file="${2:-/tmp/system_info_$host.txt}"
+    
+    log_message "Getting system information for $host"
+    
+    # Try to get system information via SSH
+    ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$host" "
+        echo '--- System Information for $host ---' > '$output_file';
+        echo 'Hostname: \$(hostname)' >> '$output_file';
+        echo 'OS: \$(uname -srm)' >> '$output_file';
+        echo 'Kernel Version: \$(uname -r)' >> '$output_file';
+        echo 'Uptime: \$(uptime)' >> '$output_file';
+        echo 'Load Average: \$(uptime | cut -d',' -f3-)' >> '$output_file';
+        echo 'CPU Info:' >> '$output_file';
+        lscpu | head -20 >> '$output_file';
+        echo 'Memory Info:' >> '$output_file';
+        free -h >> '$output_file';
+        echo 'Disk Usage:' >> '$output_file';
+        df -h >> '$output_file';
+        echo 'Network Interfaces:' >> '$output_file';
+        ip addr show >> '$output_file';
+        echo 'Running Processes:' >> '$output_file';
+        ps aux | head -20 >> '$output_file';
+        echo 'Last Login Information:' >> '$output_file';
+        last | head -10 >> '$output_file';
+        echo 'Current Users:' >> '$output_file';
+        who >> '$output_file';
+        echo 'System Information retrieved on \$(date)' >> '$output_file';
+    " 2>/dev/null
+    
+    if [ $? -eq 0 ]; then
+        log_message "System information retrieved for $host"
+        echo "System information retrieved for $host. Saved to $output_file"
+    else
+        log_error "Failed to get system information for $host"
+        echo "Failed to get system information for $host"
+    fi
+}
+
+# Function to install common packages
+install_common_packages() {
+    local hosts_file=$1
+    local package_list=$2
+    local results_file="${3:-/tmp/package_install_results.txt}"
+    
+    log_message "Installing packages $package_list on hosts in $hosts_file"
+    
+    > "$results_file"
+    
+    while IFS= read -r host; do
+        if [ -n "$host" ]; then
+            log_message "Installing packages on $host"
+            ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$host" "
+                # Detect OS and install packages accordingly
+                if [ -f /etc/os-release ]; then
+                    . /etc/os-release
+                    OS=\$NAME
+                    VER=\$VERSION_ID
+                else
+                    OS=\$(uname -s)
+                fi
+                
+                case \$OS in
+                    *Ubuntu*|*Debian*)
+                        sudo apt-get update
+                        sudo apt-get install -y $package_list
+                        ;;
+                    *CentOS*|*Red*Hat*|*Fedora*|*Rocky*|*AlmaLinux*)
+                        if command -v dnf &> /dev/null; then
+                            sudo dnf install -y $package_list
+                        else
+                            sudo yum install -y $package_list
+                        fi
+                        ;;
+                    *)
+                        echo 'Unsupported OS: \$OS'
+                        ;;
+                esac
+            " 2>>"$results_file"
+            
+            if [ ${PIPESTATUS[0]} -eq 0 ]; then
+                echo "$host - SUCCESS" >> "$results_file"
+            else
+                echo "$host - FAILED" >> "$results_file"
+                log_error "Package installation failed on $host"
+            fi
+        fi
+    done < "$hosts_file"
+    
+    log_message "Package installation completed"
+    echo "Package installation completed. Results saved to $results_file"
+}
+
+# Function to check firewall status
+check_firewall_status() {
+    local hosts_file=$1
+    local results_file="${2:-/tmp/firewall_status.txt}"
+    
+    log_message "Checking firewall status on hosts in $hosts_file"
+    
+    > "$results_file"
+    
+    while IFS= read -r host; do
+        if [ -n "$host" ]; then
+            log_message "Checking firewall on $host"
+            ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$host" "
+                # Check firewall status
+                if command -v ufw &> /dev/null; then
+                    echo 'Host: $host (Ubuntu Firewall)' >> '$results_file'
+                    ufw status verbose >> '$results_file'
+                    echo '' >> '$results_file'
+                elif command -v firewall-cmd &> /dev/null; then
+                    echo 'Host: $host (Firewalld)' >> '$results_file'
+                    firewall-cmd --state >> '$results_file'
+                    firewall-cmd --list-all >> '$results_file'
+                    echo '' >> '$results_file'
+                elif command -v iptables &> /dev/null; then
+                    echo 'Host: $host (IPTables)' >> '$results_file'
+                    iptables -L >> '$results_file'
+                    echo '' >> '$results_file'
+                else
+                    echo 'Host: $host (No known firewall detected)' >> '$results_file'
+                    echo '' >> '$results_file'
+                fi
+            " 2>/dev/null
+            
+            if [ $? -ne 0 ]; then
+                log_error "Failed to check firewall on $host"
+            fi
+        fi
+    done < "$hosts_file"
+    
+    log_message "Firewall status check completed"
+    echo "Firewall status check completed. Results saved to $results_file"
+}
+
+# Function to check template readiness
+check_template_readiness() {
+    local host=$1
+    local results_file="${2:-/tmp/template_readiness_$host.txt}"
+    
+    log_message "Checking template readiness for $host"
+    
+    # Try to get template readiness info via SSH
+    ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$host" "
+        echo '--- Template Readiness Report for $host ---' > '$results_file';
+        echo 'Date: \$(date)' >> '$results_file';
+        echo '' >> '$results_file';
+        
+        echo '=== Basic System Checks ===' >> '$results_file';
+        echo 'OS: \$(uname -srm)' >> '$results_file';
+        echo 'Architecture: \$(uname -m)' >> '$results_file';
+        echo 'Hostname: \$(hostname)' >> '$results_file';
+        echo 'System Uptime: \$(uptime)' >> '$results_file';
+        echo '' >> '$results_file';
+        
+        echo '=== Disk Space ===' >> '$results_file';
+        df -h >> '$results_file';
+        echo '' >> '$results_file';
+        
+        echo '=== Memory Status ===' >> '$results_file';
+        free -h >> '$results_file';
+        echo '' >> '$results_file';
+        
+        echo '=== Package Manager Status ===' >> '$results_file';
+        if command -v apt &> /dev/null; then
+            echo 'Package Manager: APT (Debian/Ubuntu)' >> '$results_file';
+        elif command -v yum &> /dev/null; then
+            echo 'Package Manager: YUM (RHEL/CentOS)' >> '$results_file';
+        elif command -v dnf &> /dev/null; then
+            echo 'Package Manager: DNF (Fedora/Rocky/AlmaLinux)' >> '$results_file';
+        else
+            echo 'Package Manager: Unknown' >> '$results_file';
+        fi
+        echo '' >> '$results_file';
+        
+        echo '=== Security Updates ===' >> '$results_file';
+        if command -v apt &> /dev/null; then
+            apt list --upgradable 2>/dev/null | head -20 >> '$results_file';
+        elif command -v yum &> /dev/null; then
+            yum check-update 2>/dev/null | head -20 >> '$results_file';
+        elif command -v dnf &> /dev/null; then
+            dnf check-update 2>/dev/null | head -20 >> '$results_file';
+        fi
+        echo '' >> '$results_file';
+        
+        echo '=== Network Configuration ===' >> '$results_file';
+        ip addr show >> '$results_file';
+        echo '' >> '$results_file';
+        
+        echo '=== SSH Service Status ===' >> '$results_file';
+        if command -v systemctl &> /dev/null; then
+            systemctl status ssh 2>/dev/null >> '$results_file';
+        elif command -v service &> /dev/null; then
+            service ssh status 2>/dev/null >> '$results_file';
+        fi
+        echo '' >> '$results_file';
+        
+        echo 'Template Readiness Report completed on \$(date)' >> '$results_file';
+    " 2>/dev/null
+    
+    if [ $? -eq 0 ]; then
+        log_message "Template readiness report generated for $host"
+        echo "Template readiness report generated for $host. Saved to $results_file"
+    else
+        log_error "Failed to generate template readiness report for $host"
+        echo "Failed to generate template readiness report for $host"
+    fi
+}
+
+# Function to display help
+show_help() {
+    cat >cat >cat << EOF3 << EOF3 << EOF
+Master Linux Script - All-in-one Linux administration tool
+
+Usage: $0 [OPTIONS] [SUBCOMMAND]
+
+Options:
+    -h, --help              Show this help message
+    -v, --verbose           Enable verbose output
+    --log-file PATH         Specify log file path (default: /tmp/master_linux_script.log)
+
+Subcommands:
+    network-scan [NETWORK] [INTERFACE]
+        Perform network scan on the specified network using the specified interface
+        If NETWORK is not provided, it will use the current machine's network
+        If INTERFACE is not provided, it will auto-detect the primary interface
+    
+    ssh-check HOSTS_FILE
+        Check SSH connectivity to hosts listed in HOSTS_FILE
+    
+    system-info HOST
+        Get detailed system information for the specified HOST
+    
+    install-packages HOSTS_FILE PACKAGE_LIST
+        Install packages on hosts listed in HOSTS_FILE
+        PACKAGE_LIST should be space-separated list of packages
+    
+    firewall-status HOSTS_FILE
+        Check firewall status on hosts listed in HOSTS_FILE
+    
+    template-readiness HOST
+        Check if the specified HOST is ready to be used as a template
+    
+Examples:
+    $0 network-scan
+    $0 network-scan 192.168.1.0 eth0
+    $0 ssh-check /tmp/active_hosts.txt
+    $0 system-info 192.168.1.100
+    $0 install-packages /tmp/hosts.txt curl vim git
+    $0 firewall-status /tmp/hosts.txt
+    $0 template-readiness 192.168.1.100
+
+EOF
+}
+
+# Main execution logic
+main() {
+    local verbose=false
+    local log_file="/tmp/master_linux_script.log"
+    local subcommand=""
+    local args=()
+    
+    # Parse options
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -h|--help)
+                show_help
+                exit 0
+                ;;
+            -v|--verbose)
+                verbose=true
+                shift
+                ;;
+            --log-file)
+                log_file="$2"
+                shift 2
+                ;;
+            -*)
+                echo "Unknown option: $1" >&2
+                show_help
+                exit 1
+                ;;
+            *)
+                if [ -z "$subcommand" ]; then
+                    subcommand="$1"
+                else
+                    args+=("$1")
+                fi
+                shift
+                ;;
+        esac
+    done
+    
+    # Set up logging based on verbosity
+    if [ "$verbose" = true ]; then
+        exec 3>&1 4>&2
+    else
+        exec 3>/dev/null 4>&2
+    fi
+    
+    # Execute subcommand
+    case "$subcommand" in
+        "network-scan")
+            local network=""
+            local interface=""
+            
+            if [ ${#args[@]} -ge 1 ]; then
+                network="${args[0]}"
+            fi
+            
+            if [ ${#args[@]} -ge 2 ]; then
+                interface="${args[1]}"
+            fi
+            
+            if [ -z "$network" ]; then
+                # Auto-detect network
+                interface=$(get_network_interface)
+                network_info=$(get_network_info "$interface")
+                network=$(echo "$network_info" | cut -d',' -f1)
+                # Extract network portion (first 3 octets)
+                network=$(echo "$network" | cut -d'.' -f1-3).0
+            fi
+            
+            if [ -z "$interface" ]; then
+                interface=$(get_network_interface)
+            fi
+            
+            log_message "Initiating network scan for $network using interface $interface"
+            ping_hosts "$network" "255.255.255.0" "$interface"
+            ;;
+            
+        "ssh-check")
+            if [ ${#args[@]} -lt 1 ]; then
+                echo "Error: HOSTS_FILE is required for ssh-check subcommand" >&2
+                exit 1
+            fi
+            local hosts_file="${args[0]}"
+            if [ ! -f "$hosts_file" ]; then
+                echo "Error: Hosts file $hosts_file does not exist" >&2
+                exit 1
+            fi
+            check_ssh_connectivity "$hosts_file"
+            ;;
+            
+        "system-info")
+            if [ ${#args[@]} -lt 1 ]; then
+                echo "Error: HOST is required for system-info subcommand" >&2
+                exit 1
+            fi
+            local host="${args[0]}"
+            if ! validate_ip "$host"; then
+                echo "Error: Invalid IP address $host" >&2
+                exit 1
+            fi
+            get_system_info "$host"
+            ;;
+            
+        "install-packages")
+            if [ ${#args[@]} -lt 2 ]; then
+                echo "Error: HOSTS_FILE and PACKAGE_LIST are required for install-packages subcommand" >&2
+                exit 1
+            fi
+            local hosts_file="${args[0]}"
+            shift
+            shift
+            local package_list="$*"
+            if [ ! -f "$hosts_file" ]; then
+                echo "Error: Hosts file $hosts_file does not exist" >&2
+                exit 1
+            fi
+            install_common_packages "$hosts_file" "$package_list"
+            ;;
+            
+        "firewall-status")
+            if [ ${#args[@]} -lt 1 ]; then
+                echo "Error: HOSTS_FILE is required for firewall-status subcommand" >&2
+                exit 1
+            fi
+            local hosts_file="${args[0]}"
+            if [ ! -f "$hosts_file" ]; then
+                echo "Error: Hosts file $hosts_file does not exist" >&2
+                exit 1
+            fi
+            check_firewall_status "$hosts_file"
+            ;;
+            
+        "template-readiness")
+            if [ ${#args[@]} -lt 1 ]; then
+                echo "Error: HOST is required for template-readiness subcommand" >&2
+                exit 1
+            fi
+            local host="${args[0]}"
+            if ! validate_ip "$host"; then
+                echo "Error: Invalid IP address $host" >&2
+                exit 1
+            fi
+            check_template_readiness "$host"
+            ;;
+            
+        "")
+            echo "No subcommand provided. Use -h or --help for usage information." >&2
+            exit 1
+            ;;
+            
+        *)
+            echo "Unknown subcommand: $subcommand" >&2
+            show_help
+            exit 1
+            ;;
+    esac
+}
+
+# Run main function with all arguments
+main "$@"
