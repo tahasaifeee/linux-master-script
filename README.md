@@ -13,20 +13,16 @@ A comprehensive all-in-one Linux administration script that combines network sca
 
 ## Quick Install
 
-Since this is a local repository, you'll need to obtain the script file first. After copying the script to your system, you can make it executable:
+Run the following command to download and execute the script:
 
 ```bash
-chmod +x master_linux_script.sh
+curl -sSL https://raw.githubusercontent.com/tahasaifeee/linux-master-script/main/master_linux_script.sh | sudo bash
 ```
 
-For demonstration purposes, if the script were hosted online, you could use:
-```bash
-curl -sSL https://raw.githubusercontent.com/your-repo/master/master_linux_script.sh -o master_linux_script.sh && chmod +x master_linux_script.sh
-```
+Alternatively, you can download and make it executable manually:
 
-Or alternatively:
 ```bash
-wget https://raw.githubusercontent.com/your-repo/master/master_linux_script.sh -O master_linux_script.sh && chmod +x master_linux_script.sh
+curl -sSL https://raw.githubusercontent.com/tahasaifeee/linux-master-script/main/master_linux_script.sh -o master_linux_script.sh && chmod +x master_linux_script.sh
 ```
 
 ## Usage
