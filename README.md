@@ -36,5 +36,42 @@ Designed to survive **piped execution** (e.g., `curl ... | bash`) while remainin
 
 ### Run directly (no install needed):
 
+Recommended (secure-ish, uses bash -c to ensure the script gets a proper argv/env and supports tty):
+
 ```bash
-curl -sSL https://raw.githubusercontent.com/<user>/<repo>/main/master-linux-tool.sh | bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/tahasaifeee/linux-master-script/main/master-linux-tool.sh)"
+```
+
+One-line (classic "one-click") options — choose one:
+
+- Run with curl and bash (non-sudo):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/tahasaifeee/linux-master-script/main/master-linux-tool.sh | bash
+```
+
+- Run with curl and bash as root (if the script requires elevated privileges):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/tahasaifeee/linux-master-script/main/master-linux-tool.sh | sudo bash
+```
+
+- Run with wget:
+
+```bash
+wget -qO- https://raw.githubusercontent.com/tahasaifeee/linux-master-script/main/master-linux-tool.sh | bash
+```
+
+Notes:
+- The script is designed to be safe for piped execution and reads prompts from `/dev/tty` when needed.
+- Review the script before running if you have security concerns: https://raw.githubusercontent.com/tahasaifeee/linux-master-script/main/master-linux-tool.sh
+
+---
+
+## 🔎 What it does
+
+(keep existing or add a description here explaining the 9 admin functions, logging behavior, and how the menu works)
+
+---
+
+(keep the rest of the README as-is or update other sections if desired)
