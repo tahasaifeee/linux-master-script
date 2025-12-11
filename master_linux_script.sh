@@ -79,7 +79,7 @@ configure_static_ip() {
     ip addr show "$interface" | grep 'inet '
     
     echo "Enter the static IP address you want to assign:"
-    read -r static_ip
+    read -r static_ip </dev/tty
     
     if ! validate_ip "$static_ip"; then
         echo "Invalid IP address format."
@@ -87,10 +87,10 @@ configure_static_ip() {
     fi
     
     echo "Enter the subnet mask (e.g., 255.255.255.0):"
-    read -r netmask
+    read -r netmask </dev/tty
     
     echo "Enter the gateway address:"
-    read -r gateway
+    read -r gateway </dev/tty
     
     echo "Configuring static IP address..."
     
@@ -586,7 +586,7 @@ main() {
         exec 3>&1 4>&2  # Make descriptor 3 point to terminal for user messages
         while true; do
             show_menu
-            read -r choice
+            read -r choice </dev/tty
             
             case $choice in
                 1)
@@ -597,13 +597,13 @@ main() {
                     ;;
                 3)
                     echo "Enter network to scan (or press Enter for auto-detection):"
-                    read -r network_scan
+                    read -r network_scan </dev/tty
                     if [ -z "$network_scan" ]; then
                         log_message "Initiating network scan with auto-detection"
                         ping_hosts "$(echo $(get_network_info $(get_network_interface)) | cut -d',' -f1 | cut -d'.' -f1-3).0" "255.255.255.0" "$(get_network_interface)"
                     else
                         echo "Enter interface to use (or press Enter for auto-detection):"
-                        read -r interface_scan
+                        read -r interface_scan </dev/tty
                         if [ -z "$interface_scan" ]; then
                             interface_scan=$(get_network_interface)
                         fi
@@ -613,7 +613,7 @@ main() {
                     ;;
                 4)
                     echo "Enter path to hosts file:"
-                    read -r hosts_file
+                    read -r hosts_file </dev/tty
                     if [ ! -f "$hosts_file" ]; then
                         echo "Error: Hosts file $hosts_file does not exist"
                     else
@@ -622,7 +622,7 @@ main() {
                     ;;
                 5)
                     echo "Enter host IP address:"
-                    read -r host
+                    read -r host </dev/tty
                     if ! validate_ip "$host"; then
                         echo "Error: Invalid IP address $host"
                     else
@@ -631,18 +631,18 @@ main() {
                     ;;
                 6)
                     echo "Enter path to hosts file:"
-                    read -r hosts_file
+                    read -r hosts_file </dev/tty
                     if [ ! -f "$hosts_file" ]; then
                         echo "Error: Hosts file $hosts_file does not exist"
                     else
                         echo "Enter package list (space-separated):"
-                        read -r package_list
+                        read -r package_list </dev/tty
                         install_common_packages "$hosts_file" "$package_list"
                     fi
                     ;;
                 7)
                     echo "Enter path to hosts file:"
-                    read -r hosts_file
+                    read -r hosts_file </dev/tty
                     if [ ! -f "$hosts_file" ]; then
                         echo "Error: Hosts file $hosts_file does not exist"
                     else
@@ -651,7 +651,7 @@ main() {
                     ;;
                 8)
                     echo "Enter host IP address:"
-                    read -r host
+                    read -r host </dev/tty
                     if ! validate_ip "$host"; then
                         echo "Error: Invalid IP address $host"
                     else
@@ -689,7 +689,7 @@ main() {
             
             echo ""
             echo "Press Enter to continue to the main menu..."
-            read -r
+            read -r </dev/tty
         done
     fi
     
