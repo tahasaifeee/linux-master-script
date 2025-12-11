@@ -358,7 +358,7 @@ check_template_readiness() {
 
 # Function to display help
 show_help() {
-    cat << EOF
+    cat >&3 << EOF
 Master Linux Script - All-in-one Linux administration tool
 
 Usage: $0 [OPTIONS] [SUBCOMMAND]
