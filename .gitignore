@@ -1,1 +1,1 @@
-Nothing needs to be added to .gitignore for this change list. The added file `master-linux-tool.sh` is a shell script source file, which should be tracked in version control. Since there are no build artifacts, dependencies, temporary files, or other ignorable items in the changes, no modifications to .gitignore are necessary.
+Nothing should be ignored in this case, as the changes only include source/config files (.md, .sh, .conf) without any build artifacts, dependencies, or temporary files.
