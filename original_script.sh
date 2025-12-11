@@ -72,129 +72,6 @@ get_network_info() {
     echo "$ip_address,$subnet_mask"
 }
 
-# Function to configure static IP
-configure_static_ip() {
-    local interface=$(get_network_interface)
-    echo "Current network configuration for $interface:"
-    ip addr show "$interface" | grep 'inet '
-    
-    echo "Enter the static IP address you want to assign:"
-    read -r static_ip
-    
-    if ! validate_ip "$static_ip"; then
-        echo "Invalid IP address format."
-        return 1
-    fi
-    
-    echo "Enter the subnet mask (e.g., 255.255.255.0):"
-    read -r netmask
-    
-    echo "Enter the gateway address:"
-    read -r gateway
-    
-    echo "Configuring static IP address..."
-    
-    # Determine if we're on a Debian-based or Red Hat-based system
-    if [ -f /etc/debian_version ]; then
-        # Debian/Ubuntu
-        backup_file="/etc/network/interfaces.backup.$(date +%s)"
-        cp /etc/network/interfaces "$backup_file"
-        
-        # Write new configuration
-        cat > /etc/network/interfaces << EOF
-auto lo
-iface lo inet loopback
-
-auto $interface
-iface $interface inet static
-address $static_ip
-netmask $netmask
-gateway $gateway
-dns-nameservers 8.8.8.8 8.8.4.4
-EOF
-        
-        echo "Configuration written to /etc/network/interfaces"
-        echo "Restarting networking service..."
-        systemctl restart networking
-    elif [ -f /etc/redhat-release ] || [ -f /etc/centos-release ] || [ -f /etc/fedora-release ]; then
-        # Red Hat/CentOS/Fedora
-        config_file="/etc/sysconfig/network-scripts/ifcfg-$interface"
-        backup_file="$config_file.backup.$(date +%s)"
-        cp "$config_file" "$backup_file"
-        
-        # Update configuration
-        sed -i "s/^BOOTPROTO=.*/BOOTPROTO=static/" "$config_file"
-        sed -i "s/^IPADDR=.*/IPADDR=$static_ip/" "$config_file"
-        sed -i "s/^NETMASK=.*/NETMASK=$netmask/" "$config_file"
-        sed -i "s/^GATEWAY=.*/GATEWAY=$gateway/" "$config_file"
-        sed -i '/^DNS1=/d' "$config_file"
-        sed -i '/^DNS2=/d' "$config_file"
-        echo "DNS1=8.8.8.8" >> "$config_file"
-        echo "DNS2=8.8.4.4" >> "$config_file"
-        
-        echo "Configuration updated in $config_file"
-        echo "Restarting networking service..."
-        systemctl restart network
-    else
-        echo "Unsupported distribution. Manual configuration required."
-        return 1
-    fi
-    
-    echo "Static IP configuration applied. New IP: $static_ip"
-}
-
-# Function to restart network
-restart_network() {
-    echo "Restarting network services..."
-    
-    if command -v systemctl &> /dev/null; then
-        # Try to restart the appropriate service based on the system
-        if [ -f /etc/debian_version ]; then
-            # Debian/Ubuntu
-            systemctl restart networking
-        elif [ -f /etc/redhat-release ] || [ -f /etc/centos-release ] || [ -f /etc/fedora-release ]; then
-            # Red Hat/CentOS/Fedora
-            systemctl restart network
-        else
-            # Try both common services
-            systemctl restart networking 2>/dev/null || systemctl restart network
-        fi
-        
-        # Also try network manager if it's running
-        if systemctl is-active --quiet NetworkManager; then
-            systemctl restart NetworkManager
-        fi
-    elif command -v service &> /dev/null; then
-        # On older systems that use service command
-        service networking restart 2>/dev/null || service network restart
-    else
-        # Fallback to direct init scripts
-        /etc/init.d/networking restart 2>/dev/null || /etc/init.d/network restart
-    fi
-    
-    echo "Network services restarted."
-}
-
-# Function to display interactive menu
-show_menu() {
-    echo ""
-    echo "==========================================="
-    echo "    Master Linux Script - Interactive Menu"
-    echo "==========================================="
-    echo "1. Configure Static IP"
-    echo "2. Restart Network"
-    echo "3. Network Scan"
-    echo "4. SSH Connectivity Check"
-    echo "5. System Information"
-    echo "6. Install Packages"
-    echo "7. Firewall Status"
-    echo "8. Template Readiness Check"
-    echo "9. System Diagnostics"
-    echo "0. Exit"
-    echo "==========================================="
-    echo -n "Enter your choice (0-9): "
-}
-
 # Function to ping hosts
 ping_hosts() {
     local network=$1
@@ -491,10 +368,6 @@ Options:
     -v, --verbose           Enable verbose output
     --log-file PATH         Specify log file path (default: /tmp/master_linux_script.log)
 
-Interactive Mode:
-    Running the script without any arguments will launch an interactive menu
-    with various system administration tasks.
-
 Subcommands:
     network-scan [NETWORK] [INTERFACE]
         Perform network scan on the specified network using the specified interface
@@ -525,18 +398,6 @@ Examples:
     $0 install-packages /tmp/hosts.txt curl vim git
     $0 firewall-status /tmp/hosts.txt
     $0 template-readiness 192.168.1.100
-
-Interactive Menu Options:
-    1. Configure Static IP - Set a static IP address for the current system
-    2. Restart Network - Restart network services
-    3. Network Scan - Scan the network for active hosts
-    4. SSH Connectivity Check - Check SSH access to multiple hosts
-    5. System Information - Get detailed information about a remote host
-    6. Install Packages - Install packages on multiple hosts
-    7. Firewall Status - Check firewall status on multiple hosts
-    8. Template Readiness Check - Verify if a host is ready to be used as a template
-    9. System Diagnostics - Display system information and diagnostics
-    0. Exit - Quit the script
 
 EOF
 }
@@ -579,131 +440,14 @@ main() {
         esac
     done
     
-    # If no subcommand is provided, show interactive menu
-    if [ -z "$subcommand" ]; then
-        # For interactive mode, restore terminal output and set up logging for user feedback
-        exec 1>&3 2>&4  # Restore stdout and stderr to original
-        exec 3>&1 4>&2  # Make descriptor 3 point to terminal for user messages
-        while true; do
-            show_menu
-            read -r choice
-            
-            case $choice in
-                1)
-                    configure_static_ip
-                    ;;
-                2)
-                    restart_network
-                    ;;
-                3)
-                    echo "Enter network to scan (or press Enter for auto-detection):"
-                    read -r network_scan
-                    if [ -z "$network_scan" ]; then
-                        log_message "Initiating network scan with auto-detection"
-                        ping_hosts "$(echo $(get_network_info $(get_network_interface)) | cut -d',' -f1 | cut -d'.' -f1-3).0" "255.255.255.0" "$(get_network_interface)"
-                    else
-                        echo "Enter interface to use (or press Enter for auto-detection):"
-                        read -r interface_scan
-                        if [ -z "$interface_scan" ]; then
-                            interface_scan=$(get_network_interface)
-                        fi
-                        log_message "Initiating network scan for $network_scan using interface $interface_scan"
-                        ping_hosts "$network_scan" "255.255.255.0" "$interface_scan"
-                    fi
-                    ;;
-                4)
-                    echo "Enter path to hosts file:"
-                    read -r hosts_file
-                    if [ ! -f "$hosts_file" ]; then
-                        echo "Error: Hosts file $hosts_file does not exist"
-                    else
-                        check_ssh_connectivity "$hosts_file"
-                    fi
-                    ;;
-                5)
-                    echo "Enter host IP address:"
-                    read -r host
-                    if ! validate_ip "$host"; then
-                        echo "Error: Invalid IP address $host"
-                    else
-                        get_system_info "$host"
-                    fi
-                    ;;
-                6)
-                    echo "Enter path to hosts file:"
-                    read -r hosts_file
-                    if [ ! -f "$hosts_file" ]; then
-                        echo "Error: Hosts file $hosts_file does not exist"
-                    else
-                        echo "Enter package list (space-separated):"
-                        read -r package_list
-                        install_common_packages "$hosts_file" "$package_list"
-                    fi
-                    ;;
-                7)
-                    echo "Enter path to hosts file:"
-                    read -r hosts_file
-                    if [ ! -f "$hosts_file" ]; then
-                        echo "Error: Hosts file $hosts_file does not exist"
-                    else
-                        check_firewall_status "$hosts_file"
-                    fi
-                    ;;
-                8)
-                    echo "Enter host IP address:"
-                    read -r host
-                    if ! validate_ip "$host"; then
-                        echo "Error: Invalid IP address $host"
-                    else
-                        check_template_readiness "$host"
-                    fi
-                    ;;
-                9)
-                    echo "Running system diagnostics..."
-                    echo "=== System Information ==="
-                    uname -a
-                    echo ""
-                    echo "=== Disk Usage ==="
-                    df -h
-                    echo ""
-                    echo "=== Memory Usage ==="
-                    free -h
-                    echo ""
-                    echo "=== Network Interfaces ==="
-                    ip addr show
-                    echo ""
-                    echo "=== Active Network Connections ==="
-                    ss -tuln
-                    echo ""
-                    echo "=== System Load ==="
-                    uptime
-                    ;;
-                0)
-                    echo "Exiting Master Linux Script. Goodbye!"
-                    exit 0
-                    ;;
-                *)
-                    echo "Invalid option. Please enter a number between 0 and 9."
-                    ;;
-            esac
-            
-            echo ""
-            echo "Press Enter to continue to the main menu..."
-            read -r
-        done
-    fi
-    
-    # Set up logging based on verbosity for command-line mode
-    # First, ensure we're writing logs to the file
-    exec 1>>"$LOG_FILE"
-    exec 2>>"$LOG_FILE"
+    # Set up logging based on verbosity
     if [ "$verbose" = true ]; then
         exec 3>&1 4>&2
     else
         exec 3>/dev/null 4>&2
     fi
     
-    # Execute subcommand if provided
+    # Execute subcommand
     case "$subcommand" in
         "network-scan")
             local network=""
@@ -800,6 +544,11 @@ main() {
                 exit 1
             fi
             check_template_readiness "$host"
+            ;;
+            
+        "")
+            echo "No subcommand provided. Use -h or --help for usage information." >&2
+            exit 1
             ;;
             
         *)
